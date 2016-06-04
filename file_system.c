@@ -1,4 +1,5 @@
 #include "file_system.h"
+#include "list.h"
 
 #include "string.h"
 #include "stdlib.h"
@@ -9,7 +10,7 @@
 #include <stddef.h>
 
 fs_tree file_system_tree;
-lock_descriptor file_system_lock
+lock_descriptor file_system_lock;
 
 //Extra functions
 
@@ -40,7 +41,7 @@ void init_file_system_node(struct fs_node** result, const char* name, node_type 
 void init_file_system() {
     printf("File system initialization started\n");
 
-    file_system_lock.is_locked = FALSE;
+    file_system_lock.is_locked = 0;
 
     file_system_tree.root.name = "";
     file_system_tree.root.node_t = DIRECTORY;
@@ -95,7 +96,7 @@ fs_node* find_file_directory(const char* name, node_type type, fs_node* src) {
      * we recursively run our find_file_directory function in the subtrees
      * if we found what we wanted in the subtree, we return it's node
      */
-    for(list_head* current_node = src->children.next; current_node != &(src->children); current_node = current_node->next) {
+    for(struct list_head* current_node = src->children.next; current_node != &(src->children); current_node = current_node->next) {
         fs_node* subtree_result = find_file_directory(name, type, (fs_node*)current_node);
         if(subtree_result != NULL) {
             printf("We found our file/directory in the subtree\n");
@@ -107,7 +108,7 @@ fs_node* find_file_directory(const char* name, node_type type, fs_node* src) {
     return NULL;
 }
 
-const char* get_directory_name(char* file_name) {
+char* get_directory_name(const char* file_name) {
     int length = (int) strlen(file_name);
 
     //Decrease length until we find name of directory where our file placed (ends with '/')
@@ -146,7 +147,7 @@ struct fs_node* find_create_file_directory(const char* name, node_type type) {
     // We need locks to prevent changing file_system_tree structure while we're finding smth in it
     lock(&file_system_lock);
     fs_node* result = find_file_directory(name, type, &(file_system_tree.root));
-    unlock(&fs_lock);
+    unlock(&file_system_lock);
 
     //If we didn't find anything, we need to create fs_node for our file/directory
     if(result == NULL) {
@@ -158,7 +159,7 @@ struct fs_node* find_create_file_directory(const char* name, node_type type) {
 
         //Return node of our containing directory by name
         fs_node* containing_directory = find_create_file_directory(directory_name, DIRECTORY);
-        kmem_free(directory_name);
+        kmem_free(containing_directory);
 
         lock(&file_system_lock);
         list_add(&(result->node), &(containing_directory->children));
@@ -171,17 +172,17 @@ struct fs_node* find_create_file_directory(const char* name, node_type type) {
 
 //And now we can easy create functions open and mkdir with "find_create_file_directory" function
 
-fs_node* open(const char* name) {
+fs_node* open(char* name) {
     printf("Open a file named: %s\n", name);
     return find_create_file_directory(name, REGULAR_FILE);
 }
 
-fs_node* mkdir(const char* name) {
+fs_node* mkdir(char* name) {
     printf("Mkdir named: %s\n", name);
     return find_create_file_directory(name, DIRECTORY);
 }
 
-void close(const char* name) {
+void close(char* name) {
     (void) name;
 }
 

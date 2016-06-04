@@ -36,7 +36,7 @@ void init_file_system(); //This method initialized our file system
 
 fs_node* find_file_directory(const char* name, node_type type, fs_node* src); //Try to found file/directory named "name" in directory src, returns its node if it exists and NULL otherwise
 
-const char* get_directory_name(const char* file_name); //Return the name of the directory, where the file named "file_name" placed
+char* get_directory_name(const char* file_name); //Return the name of the directory, where the file named "file_name" placed
 
 
 //Main functions
