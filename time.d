@@ -1,2 +1,2 @@
-time.o: time.c interrupt.h kernel.h ioport.h stdio.h time.h threads.h \
- locks.h memory.h balloc.h list.h kmem_cache.h
+time.o: time.c interrupt.h kernel.h kernel_config.h ioport.h stdio.h \
+ backtrace.h time.h

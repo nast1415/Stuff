@@ -1,2 +1,3 @@
-paging.o: paging.c paging.h kernel.h memory.h balloc.h list.h string.h \
- error.h stdio.h interrupt.h
+paging.o: paging.c paging.h kernel.h kernel_config.h memory.h locking.h \
+ threads_defs.h interrupt.h stdio.h backtrace.h list.h balloc.h string.h \
+ error.h

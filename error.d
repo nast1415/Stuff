@@ -1,1 +1,1 @@
-error.o: error.c kernel.h error.h
+error.o: error.c kernel.h kernel_config.h error.h

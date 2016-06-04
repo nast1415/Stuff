@@ -1,2 +1,2 @@
-memory.o: memory.c kernel.h memory.h balloc.h list.h stdio.h interrupt.h \
- misc.h
+memory.o: memory.c locking.h threads_defs.h interrupt.h stdio.h \
+ backtrace.h kernel.h kernel_config.h list.h memory.h balloc.h misc.h

@@ -1,2 +1,3 @@
-threads.o: threads.c threads.h locks.h interrupt.h memory.h balloc.h \
- list.h kernel.h kmem_cache.h stdio.h
+threads.o: threads.c thread_regs.h threads.h locking.h threads_defs.h \
+ interrupt.h stdio.h backtrace.h kernel.h kernel_config.h list.h rbtree.h \
+ memory.h balloc.h string.h paging.h error.h time.h mm.h

@@ -1,12 +1,16 @@
 #include "kmem_cache.h"
 #include "interrupt.h"
+#include "initramfs.h"
+#include "threads.h"
 #include "memory.h"
 #include "serial.h"
 #include "paging.h"
 #include "stdio.h"
+#include "ramfs.h"
 #include "misc.h"
 #include "time.h"
-#include "threads.h"
+#include "vfs.h"
+#include "elf.h"
 
 static bool range_intersect(phys_t l0, phys_t r0, phys_t l1, phys_t r1)
 {
@@ -19,24 +23,24 @@ static bool range_intersect(phys_t l0, phys_t r0, phys_t l1, phys_t r1)
 
 static void buddy_smoke_test(void)
 {
-#define PAGES 10
-	struct page *page[PAGES];
-	int order[PAGES];
+	DBG_INFO("Start buddy test");
+	struct page *page[10];
+	int order[ARRAY_SIZE(page)];
 
-	for (int i = 0; i != PAGES; ++i) {
+	for (int i = 0; i != ARRAY_SIZE(page); ++i) {
 		page[i] = alloc_pages(i);
 		if (page[i]) {
 			const phys_t begin = page_paddr(page[i]);
 			const phys_t end = begin + (PAGE_SIZE << i);
-			printf("allocated [%#llx-%#llx]\n", begin, end - 1);
+			DBG_INFO("allocated [%#llx-%#llx]", begin, end - 1);
 			order[i] = i;
 		}
 	}
 
-	for (int i = 0; i != PAGES - 1; ++i) {
+	for (int i = 0; i != ARRAY_SIZE(page) - 1; ++i) {
 		if (!page[i])
 			break;
-		for (int j = i + 1; j != PAGES; ++j) {
+		for (int j = i + 1; j != ARRAY_SIZE(page); ++j) {
 			if (!page[j])
 				break;
 
@@ -50,16 +54,16 @@ static void buddy_smoke_test(void)
 		}
 	}
 
-	for (int i = 0; i != PAGES; ++i) {
+	for (int i = 0; i != ARRAY_SIZE(page); ++i) {
 		if (!page[i])
 			continue;
 
 		const phys_t begin = page_paddr(page[i]);
 		const phys_t end = begin + (PAGE_SIZE << i);
-		printf("freed [%#llx-%#llx]\n", begin, end - 1);
+		DBG_INFO("freed [%#llx-%#llx]", begin, end - 1);
 		free_pages(page[i], order[i]);
 	}
-#undef PAGES
+	DBG_INFO("Buddy test finished");
 }
 
 struct intlist {
@@ -69,12 +73,12 @@ struct intlist {
 
 static void slab_smoke_test(void)
 {
-#define ALLOCS 1000000
+	DBG_INFO("Start SLAB test");
 	struct kmem_cache *cache = KMEM_CACHE(struct intlist);
 	LIST_HEAD(head);
 	int i;
 
-	for (i = 0; i != ALLOCS; ++i) {
+	for (i = 0; i != 1000000; ++i) {
 		struct intlist *node = kmem_cache_alloc(cache);
 
 		if (!node)
@@ -83,7 +87,7 @@ static void slab_smoke_test(void)
 		list_add_tail(&node->link, &head);
 	}
 
-	printf("Allocated %d nodes\n", i);
+	DBG_INFO("Allocated %d nodes", i);
 
 	while (!list_empty(&head)) {
 		struct intlist *node = LIST_ENTRY(list_first(&head),
@@ -94,109 +98,41 @@ static void slab_smoke_test(void)
 	}
 
 	kmem_cache_destroy(cache);
-#undef ALLOCS
+	DBG_INFO("SLAB test finished");
 }
 
-void test_function1(void* arg) {
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function1: %d\n", i);
-		local_irq_disable();
-		if (i % 6 == 0)
-			schedule();
-		local_irq_enable();
+static int test_function(void *dummy)
+{
+	(void) dummy;
+	return 0;
+}
+
+static void test_threading(void)
+{
+	DBG_INFO("Start threading test");
+	for (int i = 0; i != 10000; ++i) {
+		const pid_t pid = create_kthread(&test_function, 0);
+
+		DBG_ASSERT(pid >= 0);
+		wait(pid);
 	}
+	DBG_INFO("Threading test finished");
 }
 
-void test_function2(void* arg) {
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function2: %d\n", i);
-		local_irq_disable();
-		if (i % 6 == 0)
-			schedule();
-		local_irq_enable();
-	}
-}
+static int start_kernel(void *dummy)
+{
+	(void) dummy;
 
-lock_descriptor ld;
+	setup_ramfs();
+	setup_initramfs();
 
-void test_function1_lock(void* arg) {
-	lock(&ld);
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function1_lock: %d\n", i);
-		local_irq_disable();
-		schedule();
-		local_irq_enable();
-	}
-	unlock(&ld);
-}
+	buddy_smoke_test();
+	slab_smoke_test();
+	test_threading();
 
-void test_function2_lock(void* arg) {
-	lock(&ld);
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function2_lock: %d\n", i);
-		local_irq_disable();
-		schedule();
-		local_irq_enable();
-	}
-	unlock(&ld);
-}
+    run_elf("/initramfs/simple_elf/elf");
 
-void test_function2_join(void* arg) {
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function2_join: %d\n", i);
-	}
-}
-
-void test_function1_join(void* arg) {
-	printf("Creating thread test_function2_join\n");
-	pid_t test_function2_join_pid = create_thread(test_function2_join, (void*) 5);
-	join(test_function2_join_pid);
-	printf("Joined thread test_function2_join\n");
-	for (int i = 0; i < (long long) arg; i++) {
-		printf("test_function1_join: %d\n", i);
-	}
-}
-
-void test(void* arg) {
-	for (int i = 0; i < (long long) arg; i++) {
-		if (i % 100000 == 0) {
-			printf("test: %d\n", i);
-		}
-	}
-}
-
-void threads_test() {
-	create_thread(test, (void*) 30000000);
-
-	printf("Creating thread test_function1\n");
-	pid_t test_function1_pid = create_thread(test_function1, (void*) 10);
-	printf("Creating thread test_function2\n");
-	pid_t test_function2_pid = create_thread(test_function2, (void*) 5);
-	printf("Threads test_function1 and test_function2 created\n");
-	
-	join(test_function1_pid);
-	printf("Joined thread test_function1\n");
-	join(test_function2_pid);
-	printf("Joined thread test_function2\n");
-
-
-	printf("Create thread test_function1_lock\n");
-	pid_t test_function1_lock_pid = create_thread(test_function1_lock, (void*) 5);
-	printf("Create thread test_function2_lock\n");
-	pid_t test_function2_lock_pid = create_thread(test_function2_lock, (void*) 5);
-	printf("Threads test_function1_lock and test_function2_lock created\n");
-	
-	join(test_function1_lock_pid);
-	printf("Joined thread test_function1_lock\n");
-	join(test_function2_lock_pid);
-	printf("Joined thread test_function2_lock\n");
-
-	printf("Creating thread test_function1_join\n");
-	pid_t test_function1_join_pid = create_thread(test_function1_join, (void*) 5);
-	join(test_function1_join_pid);
-	printf("Joined thread test_function1_join\n");
-
-	printf("Tests finished\n");	
+	return 0;
 }
 
 void main(void)
@@ -209,14 +145,12 @@ void main(void)
 	setup_paging();
 	setup_alloc();
 	setup_time();
-	setup_threads();
-	local_irq_enable();
+	setup_threading();
+	setup_vfs();
 
-	buddy_smoke_test();
-	slab_smoke_test();
-
-	local_irq_enable();
-	threads_test();
+	create_kthread(&start_kernel, 0);
+	local_preempt_enable();
+	idle();
 
 	while (1);
 }

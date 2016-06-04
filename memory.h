@@ -11,6 +11,8 @@
 
 #define KERNEL_CODE       0x18
 #define KERNEL_DATA       0x20
+#define USER_CODE         0x2b
+#define USER_DATA         0x33
 
 #define KERNEL_PHYS(x)    ((x) - KERNEL_BASE)
 #define KERNEL_VIRT(x)    ((x) + KERNEL_BASE)
@@ -46,6 +48,7 @@
 
 #include <stdint.h>
 
+#include "locking.h"
 #include "balloc.h"
 #include "list.h"
 
@@ -111,6 +114,7 @@ enum node_type {
 struct memory_node {
 	struct list_head link;
 	struct page *mmap;
+	struct spinlock lock;
 	pfn_t begin_pfn;
 	pfn_t end_pfn;
 	int id;
@@ -142,6 +146,22 @@ static inline void *page_addr(struct page *page)
 
 void setup_memory(void);
 void setup_buddy(void);
+
+struct gdt_ptr {
+	uint16_t size;
+	uint64_t addr;
+} __attribute__((packed));
+
+static inline void *get_gdt_ptr(void)
+{
+	struct gdt_ptr ptr;
+
+	__asm__("sgdt %0" : "=m"(ptr));
+	return (void *)ptr.addr;
+}
+
+static inline void load_tr(unsigned short sel)
+{ __asm__("ltr %0" : : "a"(sel)); }
 
 #endif /*__ASM_FILE__*/
 
