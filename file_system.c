@@ -181,7 +181,7 @@ fs_node* mkdir(const char* name) {
     return find_create_file_directory(name, DIRECTORY);
 }
 
-void close (const char* name) {
+void close(const char* name) {
     (void) name;
 }
 

@@ -7,6 +7,8 @@
 #include "misc.h"
 #include "time.h"
 #include "threads.h"
+#include "file_system.h"
+#include "string.h"
 
 static bool range_intersect(phys_t l0, phys_t r0, phys_t l1, phys_t r1)
 {
@@ -199,6 +201,42 @@ void threads_test() {
 	printf("Tests finished\n");	
 }
 
+void file_system_test() {
+    printf("Started file_system tests");
+    
+    printf("Open file a.txt\n");
+    fs_node* file1 = open("a.txt");
+    
+    char buffer[8];
+    char read_buffer[4];
+    for (int i = 0; i < 4; i++) {
+        read_buffer[i] = 0;
+    }
+    memcpy(buffer, "abacaba", 7);
+
+    printf("Write %s to a.txt\n", buffer);
+    write(file1, 7, 0, buffer);
+
+    printf("Read from a.txt\n");
+    read(file1, 3, 1, read_buffer);
+    printf("Read 1..3 chars: %s\n", read_buffer);
+
+    printf("Make some directories\n");
+    //fs_node* directory1 = mkdir("dir1");
+    //mkdir("dir1", "dir2");
+    //mkdir("dir1/dir2", "dir3");
+    //mkdir("dir1/dir2", "dir4");
+
+    printf("readdir dir1/dir2:\n");
+    /*struct fs_node* node = readdir("dir1/dir2");
+    while (node != 0) {
+        printf("%s\n", node->name);
+        node = node->next_node;
+    }*/
+
+    printf("file_system test finished");  
+}
+
 void main(void)
 {
 	setup_serial();
@@ -211,12 +249,16 @@ void main(void)
 	setup_time();
 	setup_threads();
 	local_irq_enable();
+	init_file_system();
+	
 
 	buddy_smoke_test();
 	slab_smoke_test();
 
 	local_irq_enable();
 	threads_test();
+
+	file_system_test();
 
 	while (1);
 }
